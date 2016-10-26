@@ -26,7 +26,7 @@ bool powerOn = false;
 bool sw01 = true;
 bool sw02 = false;
 int RS485_Send_pin = 9;
-bool AskForStatus = false //Set true to make loop send "read" through RS232
+bool AskForStatus = false; //Set true to make loop send "read" through RS232
 
 void setup() {
   // reserve 200 bytes for the inputString:
@@ -77,6 +77,9 @@ void loop() { // run over and over
     //ask VS481B for status
     AskForStatus = true;
   }
+  incommingByte = 0;
+
+  //-------------------------------------------------
 
   if (stringComplete)  //data recieved from VS481B
   {
