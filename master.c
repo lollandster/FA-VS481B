@@ -38,6 +38,9 @@ void setup() {
   // set the data rate for the SoftwareSerial port
   mySerial.begin(4800);
   pinMode(RS485_Send_pin, OUTPUT);
+
+  //Set pin13 (LED on Arduino board) as output for debug
+    pinMode(13, OUTPUT);
 }
 
 void loop() { // run over and over
@@ -83,6 +86,8 @@ void loop() { // run over and over
 
   if (stringComplete)  //data recieved from VS481B
   {
+    digitalWrite(13, HIGH); //light the LED if data is detected
+    delay(100);
     if (inputString == "Command OK") {/*Do nothing*/;}
     else if (inputString == "Command incorrect") {/*Do nothing*/;}
     else if (inputString == "Power On") {powerOn = true;}
@@ -95,7 +100,7 @@ void loop() { // run over and over
       sw02 = true;
       sw01 = false;
     }
-    else if (inputString == "end of config") {
+    else if (inputString == " F/W:V1.0.062\n\r") {
       //last line of configuration is sendt, time to send info through RS485
       statusByte = 33 + powerOn + (sw01 * 2) + (sw02 * 4);
       digitalWrite(RS485_Send_pin, HIGH); //turn on RS485 send pin
@@ -107,6 +112,7 @@ void loop() { // run over and over
       //Deconstruct config information:
 
     }
+    digitalWrite(13, LOW); //Turn of LED
   }
   if (AskForStatus == true)
   {
