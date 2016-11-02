@@ -1,10 +1,10 @@
+//Made for Arduino nano by John Arild Lolland
+
 //psudo code:
 //Master skal fungere som ledd mellom RS485 og RS232
 //RS485 brukes for å kommunisere med slavene.
 //RS232 brukes for å kommunisere med VS481B
 //Det forventes ikke kommunikasjon fra VS481B hvis ikke kommando er sendt først
-//slavene kan komme til å sende meldinger uoppfordret og bør derfor konstant
-//overvåkes.
 //To seriell porter er nødvendig for master. Software serial må brukes.
 //hardware seriell brukes for RS232 og sofrware seriell for RS485.
 
@@ -21,12 +21,14 @@ SoftwareSerial mySerial(10, 11); // RX, TX
 int statusByte = 33;
 int incommingByte = 0;
 String inputString = ""; // a string to hold incoming data from VS481B
+String debugString = "";
 boolean stringComplete = false; // whether the string is complete
 bool powerOn = false;
 bool sw01 = true;
 bool sw02 = false;
 int RS485_Send_pin = 9;
 bool AskForStatus = false; //Set true to make loop send "read" through RS232
+int counter = 0;
 
 void setup() {
   // reserve 200 bytes for the inputString:
@@ -86,51 +88,35 @@ void loop() { // run over and over
 
   if (stringComplete)  //data recieved from VS481B
   {
-    digitalWrite(13, HIGH); //light the LED if data is detected
-    delay(100);
-    if (inputString == "Command OK") {/*Do nothing*/;}
-    else if (inputString == "Command incorrect") {/*Do nothing*/;}
-    else if (inputString == "Power On") {powerOn = true;}
-    else if (inputString == "Power Off") {powerOn = false;}
-    else if (inputString == "sw i01") {
-      sw01 = true;
-      sw02 = false;
-    }
-    else if (inputString == "sw i02") {
-      sw02 = true;
-      sw01 = false;
-    }
-    else if (inputString == " F/W:V1.0.062\n\r") {
-      //last line of configuration is sendt, time to send info through RS485
-      statusByte = 33 + powerOn + (sw01 * 2) + (sw02 * 4);
-      digitalWrite(RS485_Send_pin, HIGH); //turn on RS485 send pin
-      mySerial.write(statusByte);
-      digitalWrite(RS485_Send_pin, LOW); //turn off RS485 send pin
-    }
-    else
-    {
-      //Deconstruct config information:
+    //Used under development:
+    //digitalWrite(13, HIGH); //onboard LED
+    //digitalWrite(RS485_Send_pin, HIGH); //turn on RS485 send pin
+    //mySerial.println(inputString);
+    //mySerial.println("sw01: " + String(sw01));
+    //mySerial.println("sw02: " + String(sw02));
+    //mySerial.println("powerOn: " + String(powerOn));
+    //mySerial.println("debugString:" + debugString + ":");
+    //mySerial.println("statusByte:" + String(statusByte) + ":");
+    //digitalWrite(RS485_Send_pin, LOW); //turn off RS485 send pin
 
-    }
-    digitalWrite(13, LOW); //Turn of LED
+    statusByte = 33 + powerOn + (sw01 * 2) + (sw02 * 4); //makes statusByte to be sendt to slave
+    digitalWrite(RS485_Send_pin, HIGH); //turn on RS485 send pin
+    mySerial.write(statusByte);
+    digitalWrite(RS485_Send_pin, LOW); //turn off RS485 send pin
+    inputString = "";
+    stringComplete = false;
   }
+
   if (AskForStatus == true)
   {
-    AskForStatus = false;
-    Serial.println("read"); //the command 'read' asks VS481B to return config
+    counter ++;
+    if(counter > 10000)
+    {
+      AskForStatus = false;
+      counter = 0;
+      Serial.println("read"); //the command 'read' asks VS481B to return config
+    }
   }
-}
-
-void GetStatus()
-{
-  //ask VS481B for status
-  Serial.println("read"); //the command 'read' asks VS481B to return config
-  //Wait for reply
-  //return status
-  statusByte = 33 + powerOn + (sw01 * 2) + (sw02 * 4);
-  digitalWrite(RS485_Send_pin, HIGH); //turn on RS485 send pin
-  mySerial.write(statusByte);
-  digitalWrite(RS485_Send_pin, LOW); //turn off RS485 send pin
 }
 
 void serialEvent()
@@ -139,16 +125,48 @@ void serialEvent()
   {
     // get the new byte:
     char inChar = (char)Serial.read();
-    // add it to the inputString:
-    if (inChar != '\n')
+    inputString += inChar;
+
+    //Search for Input port number. This is part of the "read" response
+    if (inputString.substring(inputString.length() - 12,inputString.length() - 1) == "Input:port ")
     {
-      inputString += inChar;
+      debugString = inputString.substring(inputString.length() - 1);
+      if(inputString.substring(inputString.length() - 1) == "2")
+      {
+        sw02 = true;
+        sw01 = false;
+      }
+      if(inputString.substring(inputString.length() - 1) == "1")
+      {
+        sw01 = true;
+        sw02 = false;
+      }
     }
-    // if the incoming character is a newline, set a flag
-    // so the main loop can do something about it:
-    if (inChar == '\n')
+
+    //Search for HDMI output on/off. This is part of the "read" response
+    if (inputString.substring(inputString.length() - 9,inputString.length() - 2) == "Output:")
     {
-      stringComplete = true;
+      debugString = inputString.substring(inputString.length() - 2);
+      if(inputString.substring(inputString.length() - 2) == "ON")
+      {
+        powerOn = true;
+      }
+      if(inputString.substring(inputString.length() - 2) == "OF") //This is "OFF", but I only check 2 characters
+      {
+        powerOn = false;
+      }
     }
+
+    //When F/W is recieved, then no more usefull information will come.
+    //Set stringComplete to true indicating that data can be sendt to slaves
+    //This also clears inputString to clear up memory.
+    if (inputString.substring(inputString.length() - 3) == "F/W")
+    {
+        stringComplete = true;
+        //inputString = "";
+    }
+    //if for any reason the inputString gets too long, then delete it
+    //This 'if' should never be 'true'
+    if (inputString.length() > 1000) {inputString = "";}
   }
 }
